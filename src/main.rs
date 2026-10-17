@@ -27,7 +27,7 @@ fn main() {
 
 struct Cpu {
     memory: [u8; 4096],
-    registers: [u8; 16],
+    v: [u8; 16],
     index: u16,
     stack: [u16; 32],
     stack_pointer: u8,
@@ -41,7 +41,7 @@ impl Cpu {
     fn new() -> Self {
         Cpu {
             memory: [0; 4096],
-            registers: [0; 16],
+            v: [0; 16],
             index: 0,
             stack: [0; 32],
             stack_pointer: 0,
@@ -63,70 +63,84 @@ impl Cpu {
     }
 
     fn cycle(&mut self) {
-        while let (Some(msb), Some(lsb)) = (
+        if let (Some(msb), Some(lsb)) = (
             self.memory.get(self.pc as usize),
             self.memory.get((self.pc + 1) as usize),
         ) {
+            self.pc += 2;
+            self.pc &= 0x0FFF;
+
             match (*msb, *lsb) {
                 (0x00, 0xE0) => {
                     self.frame_buffer = [0; 32];
                 }, 
                 (0x00, 0xEE) => {
-                    self.pc = self.stack[self.stack_pointer as usize];
-                    self.stack_pointer -= 1;
+                    if self.stack_pointer == 0 {
+                        eprintln!("WARNING: stack underflow");
+                    }
+
+                    self.stack_pointer = self.stack_pointer.wrapping_sub(1) & 15;
+                    self.pc = self.stack[self.stack_pointer as usize] & 0x0FFF;
                 },
                 (msb, lsb) if ((msb >> 4) & 0xF) == 0x1 => {
                     self.pc = u16::from_be_bytes([msb & 0xF, lsb]);
                 },
                 (msb, lsb) if ((msb >> 4) & 0xF) == 0x2 => {
-                    self.stack_pointer += 1;
+                    if self.stack_pointer == 16 {
+                        eprintln!("WARNING: stack overflow");
+                    }
+
                     self.stack[self.stack_pointer as usize] = self.pc;
                     self.pc = u16::from_be_bytes([msb & 0xF, lsb]);
+                    self.stack_pointer = self.stack_pointer.wrapping_add(1) & 15;
                 },
                 (msb, lsb) if (msb >> 4) == 0x3 => {
-                    if self.registers[(msb & 0xF) as usize] == lsb {
+                    if self.v[(msb & 0xF) as usize] == lsb {
                         self.pc += 2;
+                        self.pc &= 0x0FFF;
                     }
                 },
                 (msb, lsb) if (msb >> 4) == 0x4 => {
-                    if self.registers[(msb & 0xF) as usize] != lsb {
+                    if self.v[(msb & 0xF) as usize] != lsb {
                         self.pc += 2;
+                        self.pc &= 0x0FFF;
                     }
                 },
                 (msb, lsb) if (msb >> 4) == 0x5 && (lsb & 0xF) == 0 => {
-                    if self.registers[(msb & 0xF) as usize] == self.registers[(lsb >> 4) as usize] {
+                    if self.v[(msb & 0xF) as usize] == self.v[(lsb >> 4) as usize] {
                         self.pc += 2;
+                        self.pc &= 0x0FFF;
                     }
                 },
                 (msb, lsb) if (msb >> 4) == 0x6 => {
-                    self.registers[(msb & 0xF) as usize] = lsb;
+                    self.v[(msb & 0xF) as usize] = lsb;
                 },
                 (msb, lsb) if (msb >> 4) == 0x7 => {
-                    self.registers[(msb & 0xF) as usize] += lsb;
+                    self.v[(msb & 0xF) as usize] += lsb;
                 },
                 (msb, lsb) if (msb >> 4) == 0x8 && (lsb & 0xF) == 0 => {
-                    self.registers[(msb & 0xF) as usize] = self.registers[(lsb >> 4) as usize];
+                    self.v[(msb & 0xF) as usize] = self.v[(lsb >> 4) as usize];
                 },
                 (msb, lsb) if (msb >> 4) == 0x8 && (lsb & 0xF) == 1 => {
-                    self.registers[(msb & 0xF) as usize] |= self.registers[(lsb >> 4) as usize]
+                    self.v[(msb & 0xF) as usize] |= self.v[(lsb >> 4) as usize]
                 },
                 (msb, lsb) if (msb >> 4) == 0x8 && (lsb & 0xF) == 2 => {
-                    self.registers[(msb & 0xF) as usize] &= self.registers[(lsb >> 4) as usize]
+                    self.v[(msb & 0xF) as usize] &= self.v[(lsb >> 4) as usize]
                 },
                 (msb, lsb) if (msb >> 4) == 0x8 && (lsb & 0xF) == 3 => {
-                    self.registers[(msb & 0xF) as usize] ^= self.registers[(lsb >> 4) as usize]
+                    self.v[(msb & 0xF) as usize] ^= self.v[(lsb >> 4) as usize]
                 },
                 (msb, lsb) if (msb >> 4) == 0x8 && (lsb & 0xF) == 4 => {
-                    let (result, carry) = self.registers[(msb & 0xF) as usize]
-                        .overflowing_add(self.registers[(lsb >> 4) as usize]);
-                    self.registers[(msb & 0xF) as usize] = result;
-                    self.registers[0xF] = carry as u8;
+                    let (result, carry) = self.v[(msb & 0xF) as usize]
+                        .overflowing_add(self.v[(lsb >> 4) as usize]);
+                    self.v[(msb & 0xF) as usize] = result;
+                    self.v[0xF] = carry as u8;
                 },
                 (msb, lsb) if (msb >> 4) == 0x8 && (lsb & 0xF) == 5 => {
-                    let (result, carry) = self.registers[(msb & 0xF) as usize]
-                        .overflowing_sub(self.registers[(lsb >> 4) as usize]);
-                    self.registers[(msb & 0xF) as usize] = result;
-                    self.registers[0xF] = !carry as u8;
+                    let (result, carry) = self.v[(msb & 0xF) as usize]
+                        .overflowing_sub(self.v[(lsb >> 4) as usize]);
+                    self.v[(msb & 0xF) as usize] = result;
+                    self.v[0xF] = !carry as u8;
                 },
                 _ => todo!()
             }
@@ -152,3 +166,126 @@ const FONT_DATA: [u8; 80] = [
     0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
     0xF0, 0x80, 0xF0, 0x80, 0x80, // F
 ];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn run_test(opcode: u16, setup: impl FnOnce(&mut Cpu)) -> Cpu {
+        let mut cpu = Cpu::new();
+
+        setup(&mut cpu);
+        
+        cpu.memory[cpu.pc as usize] = (opcode >> 8) as u8;
+        cpu.memory[(cpu.pc+1) as usize] = (opcode & 0x00FF) as u8;
+
+        cpu.cycle();
+        cpu
+    }
+
+    #[test]
+    fn test_advance_pc() { assert_eq!(run_test(0x00E0, |_| {}).pc, 0x202); }
+
+    #[test]
+    fn test_pc_overflow() { assert_eq!(run_test(0x00E0, |c| {c.pc = 0xFFE}).pc, 0x000); }
+
+    #[test]
+    fn test_cls() { assert_eq!(run_test(0x00E0, |c| {c.frame_buffer[0] = 1}).frame_buffer[0], 0); }
+
+    #[test]
+    fn test_ret() {
+        let cpu = run_test(0x00EE, |c| {c.stack[0] = 0x3939; c.stack_pointer = 1});
+        assert_eq!(cpu.stack_pointer, 0);
+        assert_eq!(cpu.pc, 0x0939);
+    }
+
+    #[test]
+    fn test_ret_underflow() {
+        let cpu = run_test(0x00EE, |_| {});
+        assert_eq!(cpu.stack_pointer, 15);
+        assert_eq!(cpu.pc, 0x000);
+    }
+
+    #[test]
+    fn test_jmp() { assert_eq!(run_test(0x1420, |_| {}).pc, 0x420); }
+
+    #[test]
+    fn test_cal() {
+        let cpu = run_test(0x2420, |_| {});
+        assert_eq!(cpu.stack[0], 0x202);
+        assert_eq!(cpu.stack_pointer, 1);
+        assert_eq!(cpu.pc, 0x420);
+    }
+
+    #[test]
+    fn test_cal_overflow() {
+        let cpu = run_test(0x2420, |c| {c.stack_pointer = 15});
+        assert_eq!(cpu.stack[15], 0x202);
+        assert_eq!(cpu.stack_pointer, 0);
+        assert_eq!(cpu.pc, 0x420);
+    }
+
+    #[test]
+    fn test_seb_eq() { assert_eq!(run_test(0x3969, |c| {c.v[9] = 0x69}).pc, 0x204); }
+
+    #[test]
+    fn test_seb_ne() { assert_eq!(run_test(0x3969, |c| {c.v[9] = 0x39}).pc, 0x202); }
+
+    #[test]
+    fn test_sne_eq() { assert_eq!(run_test(0x4269, |c| {c.v[2] = 0x69}).pc, 0x202); }
+
+    #[test]
+    fn test_sne_ne() { assert_eq!(run_test(0x4269, |c| {c.v[2] = 0x39}).pc, 0x204); }
+
+    #[test]
+    fn test_ser_eq() { assert_eq!(run_test(0x5420, |c| {c.v[4] = 0x39; c.v[2] = 0x39}).pc, 0x204); }
+
+    #[test]
+    fn test_ser_ne() { assert_eq!(run_test(0x5420, |c| {c.v[4] = 0x39; c.v[2] = 0x42}).pc, 0x202); }
+
+    #[test]
+    fn test_ldvb() { assert_eq!(run_test(0x6969, |_| {}).v[9], 0x69); }
+
+    #[test]
+    fn test_add() { assert_eq!(run_test(0x7777, |c| {c.v[7] = 0x01}).v[7], 0x78); }
+
+    #[test]
+    fn test_ldvv() { assert_eq!(run_test(0x8120, |c| {c.v[1] = 0x69; c.v[2] = 0x39}).v[1], 0x39); }
+
+    #[test]
+    fn test_or() { assert_eq!(run_test(0x8121, |c| {c.v[1] = 0x69; c.v[2] = 0x39}).v[1], 0x79); }
+
+    #[test]
+    fn test_and() { assert_eq!(run_test(0x8122, |c| {c.v[1] = 0x69; c.v[2] = 0x39}).v[1], 0x29); }
+
+    #[test]
+    fn test_xor() { assert_eq!(run_test(0x8123, |c| {c.v[1] = 0x69; c.v[2] = 0x39}).v[1], 0x50); }
+
+    #[test]
+    fn test_addc_coff() {
+        let cpu = run_test(0x8124, |c| {c.v[1] = 0x69; c.v[2] = 0x39});
+        assert_eq!(cpu.v[1], 0xA2);
+        assert_eq!(cpu.v[15], 0x00);
+    }
+
+    #[test]
+    fn test_addc_con() {
+        let cpu = run_test(0x8124, |c| {c.v[1] = 0x69; c.v[2] = 0xFF});
+        assert_eq!(cpu.v[1], 0x68);
+        assert_eq!(cpu.v[15], 0x01);
+    }
+
+    #[test]
+    fn test_subc_coff() {
+        let cpu = run_test(0x8125, |c| {c.v[1] = 0x39; c.v[2] = 0x69});
+        assert_eq!(cpu.v[1], 0xD0);
+        assert_eq!(cpu.v[15], 0x00);
+    }
+
+    #[test]
+    fn test_subc_con() {
+        let cpu = run_test(0x8125, |c| {c.v[1] = 0x69; c.v[2] = 0x39});
+        assert_eq!(cpu.v[1], 0x30);
+        assert_eq!(cpu.v[15], 0x01);
+    }
+}
