@@ -142,6 +142,24 @@ impl Cpu {
                     self.v[(msb & 0xF) as usize] = result;
                     self.v[0xF] = !carry as u8;
                 },
+                (msb, lsb) if (msb >> 4) == 0x8 && (lsb & 0xF) == 6 => {
+                    let x = msb & 0xF;
+
+                    self.v[0xF] = self.v[x as usize] & 1;
+                    self.v[x as usize] >>= 1;
+                },
+                (msb, lsb) if (msb >> 4) == 0x8 && (lsb & 0xF) == 7 => {
+                    let (result, carry) = self.v[(lsb >> 4) as usize]
+                        .overflowing_sub(self.v[(msb & 0xF) as usize]);
+                    self.v[(msb & 0xF) as usize] = result;
+                    self.v[0xF] = !carry as u8;
+                },
+                (msb, lsb) if (msb >> 4) == 0x8 && (lsb & 0xF) == 0xE => {
+                    let x = msb & 0xF;
+
+                    self.v[0xF] = (self.v[x as usize] & 0x80) >> 7;
+                    self.v[x as usize] <<= 1;
+                },
                 _ => todo!()
             }
         }
@@ -287,5 +305,33 @@ mod tests {
         let cpu = run_test(0x8125, |c| {c.v[1] = 0x69; c.v[2] = 0x39});
         assert_eq!(cpu.v[1], 0x30);
         assert_eq!(cpu.v[15], 0x01);
+    }
+
+    #[test]
+    fn test_shr() {
+        let cpu = run_test(0x8106, |c| {c.v[1] = 0x69});
+        assert_eq!(cpu.v[1], 0x34);
+        assert_eq!(cpu.v[15], 0x1);
+    }
+
+    #[test]
+    fn test_sbn_coff() {
+        let cpu = run_test(0x8127, |c| {c.v[1] = 0x69; c.v[2] = 0x39});
+        assert_eq!(cpu.v[1], 0xD0);
+        assert_eq!(cpu.v[15], 0x00);
+    }
+
+    #[test]
+    fn test_sbn_con() {
+        let cpu = run_test(0x8127, |c| {c.v[1] = 0x39; c.v[2] = 0x69});
+        assert_eq!(cpu.v[1], 0x30);
+        assert_eq!(cpu.v[15], 0x01);
+    }
+
+    #[test]
+    fn test_shl() {
+        let cpu = run_test(0x810E, |c| {c.v[1] = 0x69});
+        assert_eq!(cpu.v[1], 0xD2);
+        assert_eq!(cpu.v[15], 0x0);
     }
 }
