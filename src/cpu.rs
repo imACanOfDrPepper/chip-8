@@ -1,3 +1,5 @@
+use rand::random;
+
 pub struct Cpu {
     pub memory: [u8; 4096],
     pub v: [u8; 16],
@@ -132,6 +134,23 @@ impl Cpu {
 
                     self.v[0xF] = (self.v[x as usize] & 0x80) >> 7;
                     self.v[x as usize] <<= 1;
+                }
+                (msb, lsb) if (msb >> 4) == 0x9 && (lsb & 0xF) == 0x0 => {
+                    if self.v[(msb & 0xF) as usize] != self.v[(lsb >> 4) as usize] {
+                        self.pc += 2;
+                        self.pc &= 0x0FFF;
+                    }
+                }
+                (msb, lsb) if (msb >> 4) == 0xA => {
+                    self.index = u16::from_be_bytes([msb & 0xF, lsb]);
+                }
+                (msb, lsb) if (msb >> 4) == 0xB => {
+                    self.pc = u16::from_be_bytes([msb & 0xF, lsb]) + self.v[0] as u16;
+                    self.pc &= 0x0FFF;
+                }
+                (msb, lsb) if (msb >> 4) == 0xC => {
+                    let rand: u8 = random();
+                    self.v[(msb & 0xF) as usize] = rand & lsb;
                 }
                 _ => todo!(),
             }

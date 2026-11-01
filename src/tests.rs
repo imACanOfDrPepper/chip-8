@@ -301,3 +301,39 @@ fn test_shl() {
     assert_eq!(cpu.v[1], 0xD2, "SHL should shift correctly");
     assert_eq!(cpu.v[15], 0x0, "SHL should set VF correctly");
 }
+
+#[test]
+fn test_snev_eq() {
+    let cpu = run_test(0x9010, |c| {
+        c.v[0] = 0x69;
+        c.v[1] = 0x69
+    });
+    assert_eq!(cpu.pc, 0x202, "PC shouldn't increment if Vx == Vy");
+}
+
+#[test]
+fn test_snev_ne() {
+    let cpu = run_test(0x9010, |c| {
+        c.v[0] = 0x69;
+        c.v[1] = 0x39
+    });
+    assert_eq!(cpu.pc, 0x204, "PC should increment if Vx != Vy");
+}
+
+#[test]
+fn test_ldi() {
+    let cpu = run_test(0xA420, |_| {});
+    assert_eq!(cpu.index, 0x420, "I should change");
+}
+
+#[test]
+fn test_jpv() {
+    let cpu = run_test(0xB420, |c| c.v[0] = 0x69);
+    assert_eq!(cpu.pc, 0x489, "PC should jump correctly");
+}
+
+#[test]
+fn test_rnd() {
+    let cpu = run_test(0xC607, |_| {});
+    assert!(cpu.v[6] < 8, "RND mask should get applied");
+}
