@@ -2,9 +2,13 @@ mod cpu;
 
 use crate::cpu::Cpu;
 use clap::{Arg, Command};
-use std::fs;
+use crossterm::{QueueableCommand, cursor::{self, Hide}, execute, style::Print, terminal::{Clear, ClearType}};
+use std::{
+    fs,
+    io::{self, Write},
+};
 
-fn main() {
+fn main() -> io::Result<()> {
     let mut args = Command::new("chip-8")
         .args([Arg::new("rom").required(true).value_parser(|path: &str| {
             let metadata = fs::metadata(path).unwrap();
@@ -23,8 +27,37 @@ fn main() {
     let mut cpu = Cpu::new();
     cpu.load_memory(&rom);
 
+    let mut stdout = io::stdout();
+
+    // Temp
+    cpu.frame_buffer[0] = 0xF0;
+    cpu.frame_buffer[1] = 0x90;
+    cpu.frame_buffer[2] = 0x90;
+    cpu.frame_buffer[3] = 0x90;
+    cpu.frame_buffer[4] = 0xF0;
+
+    let _ = execute!(
+        stdout,
+        Hide,
+        Clear(ClearType::All)
+    );
+
     loop {
-        todo!() // implement executing code
+        for row in 0..32 {
+            for bit in 0..64 {
+                let pixel = (cpu.frame_buffer[row] >> (63 - bit)) & 1;
+
+                stdout.queue(cursor::MoveTo(bit as u16, row as u16))?;
+
+                if pixel == 1 {
+                    stdout.queue(Print("█"))?;
+                } else {
+                    stdout.queue(Print(" "))?;
+                }
+            }
+        }
+
+        stdout.flush()?;
     }
 }
 
