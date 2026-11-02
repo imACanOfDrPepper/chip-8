@@ -2,19 +2,10 @@ mod cpu;
 
 use crate::cpu::Cpu;
 use clap::{Arg, Command};
-use crossterm::{
-    QueueableCommand,
-    cursor::{self, Hide},
-    execute,
-    style::Print,
-    terminal::{Clear, ClearType},
-};
-use std::{
-    fs,
-    io::{self, Write},
-};
+use minifb::{Key, Scale, Window, WindowOptions};
+use std::fs;
 
-fn main() -> io::Result<()> {
+fn main() {
     let mut args = Command::new("chip-8")
         .args([Arg::new("rom").required(true).value_parser(|path: &str| {
             let metadata = fs::metadata(path).unwrap();
@@ -33,27 +24,33 @@ fn main() -> io::Result<()> {
     let mut cpu = Cpu::new();
     cpu.load_memory(&rom);
 
-    let mut stdout = io::stdout();
+    let mut window = Window::new(
+        "CHIP-8 Emulator",
+        64,
+        32,
+        WindowOptions {
+            scale: Scale::X8,
+            ..WindowOptions::default()
+        },
+    )
+    .unwrap();
 
-    let _ = execute!(stdout, Hide, Clear(ClearType::All));
+    while window.is_open() && !window.is_key_down(Key::Escape) {
+        let mut buffer = vec![0u32; 64 * 32];
 
-    loop {
-        for row in 0..32 {
-            for bit in 0..64 {
-                let pixel = (cpu.frame_buffer[row] >> (63 - bit)) & 1;
+        cpu.cycle();
 
-                stdout.queue(cursor::MoveTo(bit as u16, row as u16))?;
-
-                if pixel == 1 {
-                    stdout.queue(Print("█"))?;
+        for (y, &row) in cpu.frame_buffer.iter().enumerate() {
+            for x in 0..64 {
+                buffer[64 * y + x] = if (row >> (63 - x)) & 1 == 1 {
+                    0xFFFFFF
                 } else {
-                    stdout.queue(Print(" "))?;
-                }
+                    0x000000
+                };
             }
         }
 
-        stdout.flush()?;
-        cpu.cycle();
+        window.update_with_buffer(&buffer, 64, 32).unwrap();
     }
 }
 

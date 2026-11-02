@@ -5,6 +5,6 @@ edition = "2024"
 
 [dependencies]
 clap = { version = "4.5.50", features = ["cargo"] }
-crossterm = "0.29.0"
+minifb = "0.29.0"
 rand = "0.10.3"
 tinyaudio = "1.1.0"
