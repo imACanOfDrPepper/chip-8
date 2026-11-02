@@ -177,9 +177,8 @@ impl Cpu {
                                 self.frame_buffer[y as usize] ^= new_byte;
                             }
                         }
-
-                        self.v[0xF] = collision as u8;
                     }
+                    self.v[0xF] = collision as u8;
                 }
                 _ => todo!(),
             }

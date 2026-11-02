@@ -340,7 +340,41 @@ fn test_rnd() {
 
 #[test]
 fn test_drw_basic() {
-    let cpu = run_test(0xD105, |c| {c.load_memory(&[]); c.v[1] = 60});
-    assert_eq!(cpu.frame_buffer[0], 0xF, "DRW should draw a built-in character correctly");
-    assert_eq!(cpu.v[0xF], 0, "VF should not be set since no collision occured");
+    let cpu = run_test(0xD105, |c| {
+        c.load_memory(&[]);
+        c.v[1] = 60
+    });
+    assert_eq!(
+        cpu.frame_buffer[0], 0xF,
+        "DRW should draw a built-in character correctly"
+    );
+    assert_eq!(
+        cpu.v[0xF], 0,
+        "VF should not be set since no collision occured"
+    );
+}
+
+#[test]
+fn test_drw_overflow() {
+    let cpu = run_test(0xD105, |c| {
+        c.load_memory(&[]);
+        c.v[0] = 64;
+        c.v[1] = 124
+    });
+    assert_eq!(cpu.frame_buffer[0], 0xF, "X and Y should overflow");
+    assert_eq!(
+        cpu.v[0xF], 0,
+        "VF should not be set since no collision occured"
+    );
+}
+
+#[test]
+fn test_drw_collision() {
+    let cpu = run_test(0xD105, |c| {
+        c.load_memory(&[]);
+        c.v[1] = 60;
+        c.frame_buffer[0] = 0xF
+    });
+    assert_eq!(cpu.frame_buffer[0], 0, "XOR should be applied correctly");
+    assert_eq!(cpu.v[0xF], 1, "VF should be set since a collision occured");
 }
