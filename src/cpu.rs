@@ -91,7 +91,7 @@ impl Cpu {
                     self.v[(msb & 0xF) as usize] = lsb;
                 }
                 (msb, lsb) if (msb >> 4) == 0x7 => {
-                    self.v[(msb & 0xF) as usize] += lsb;
+                    self.v[(msb & 0xF) as usize] = self.v[(msb & 0xF) as usize].wrapping_add(lsb);
                 }
                 (msb, lsb) if (msb >> 4) == 0x8 && (lsb & 0xF) == 0 => {
                     self.v[(msb & 0xF) as usize] = self.v[(lsb >> 4) as usize];

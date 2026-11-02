@@ -2,7 +2,13 @@ mod cpu;
 
 use crate::cpu::Cpu;
 use clap::{Arg, Command};
-use crossterm::{QueueableCommand, cursor::{self, Hide}, execute, style::Print, terminal::{Clear, ClearType}};
+use crossterm::{
+    QueueableCommand,
+    cursor::{self, Hide},
+    execute,
+    style::Print,
+    terminal::{Clear, ClearType},
+};
 use std::{
     fs,
     io::{self, Write},
@@ -29,11 +35,7 @@ fn main() -> io::Result<()> {
 
     let mut stdout = io::stdout();
 
-    let _ = execute!(
-        stdout,
-        Hide,
-        Clear(ClearType::All)
-    );
+    let _ = execute!(stdout, Hide, Clear(ClearType::All));
 
     loop {
         for row in 0..32 {
@@ -51,6 +53,7 @@ fn main() -> io::Result<()> {
         }
 
         stdout.flush()?;
+        cpu.cycle();
     }
 }
 
