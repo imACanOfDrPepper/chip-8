@@ -3,7 +3,10 @@ mod cpu;
 use crate::cpu::Cpu;
 use clap::{Arg, Command};
 use minifb::{Key, Scale, Window, WindowOptions};
-use std::fs;
+use std::{
+    fs, thread,
+    time::{Duration, Instant},
+};
 
 fn main() {
     let mut args = Command::new("chip-8")
@@ -35,10 +38,16 @@ fn main() {
     )
     .unwrap();
 
+    let target_frame_time = Duration::from_secs_f64(1.0 / 60.0);
+
     while window.is_open() && !window.is_key_down(Key::Escape) {
+        let frame_start = Instant::now();
+
         let mut buffer = vec![0u32; 64 * 32];
 
-        cpu.cycle();
+        for _ in 0..11 {
+            cpu.cycle();
+        }
 
         for (y, &row) in cpu.frame_buffer.iter().enumerate() {
             for x in 0..64 {
@@ -51,6 +60,12 @@ fn main() {
         }
 
         window.update_with_buffer(&buffer, 64, 32).unwrap();
+
+        let elapsed = frame_start.elapsed();
+
+        if elapsed < target_frame_time {
+            thread::sleep(target_frame_time - elapsed);
+        }
     }
 }
 
