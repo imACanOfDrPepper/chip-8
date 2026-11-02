@@ -152,6 +152,35 @@ impl Cpu {
                     let rand: u8 = random();
                     self.v[(msb & 0xF) as usize] = rand & lsb;
                 }
+                (msb, lsb) if (msb >> 4) == 0xD => {
+                    let x_start = self.v[(msb & 0xF) as usize];
+                    let y_start = self.v[(lsb >> 4) as usize];
+                    let byte_num = lsb & 0xF;
+
+                    let mut collision = false;
+
+                    for offset in 0..byte_num {
+                        let total_offset = (self.index + offset as u16) & 0xFFF;
+                        let byte = self.memory[total_offset as usize];
+
+                        for idx in 0..8 {
+                            let bit = (byte >> 7 - idx) & 1;
+                            let x = (x_start + idx) & 0x3F;
+                            let y = (y_start + offset) & 0x1F;
+
+                            if bit == 1 {
+                                if ((self.frame_buffer[y as usize] >> (63 - x)) & 1) == 1 {
+                                    collision = true;
+                                }
+
+                                let new_byte = 1 << (63 - x);
+                                self.frame_buffer[y as usize] ^= new_byte;
+                            }
+                        }
+
+                        self.v[0xF] = collision as u8;
+                    }
+                }
                 _ => todo!(),
             }
         }

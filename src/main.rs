@@ -29,13 +29,6 @@ fn main() -> io::Result<()> {
 
     let mut stdout = io::stdout();
 
-    // Temp
-    cpu.frame_buffer[0] = 0xF0;
-    cpu.frame_buffer[1] = 0x90;
-    cpu.frame_buffer[2] = 0x90;
-    cpu.frame_buffer[3] = 0x90;
-    cpu.frame_buffer[4] = 0xF0;
-
     let _ = execute!(
         stdout,
         Hide,

@@ -337,3 +337,10 @@ fn test_rnd() {
     let cpu = run_test(0xC607, |_| {});
     assert!(cpu.v[6] < 8, "RND mask should get applied");
 }
+
+#[test]
+fn test_drw_basic() {
+    let cpu = run_test(0xD105, |c| {c.load_memory(&[]); c.v[1] = 60});
+    assert_eq!(cpu.frame_buffer[0], 0xF, "DRW should draw a built-in character correctly");
+    assert_eq!(cpu.v[0xF], 0, "VF should not be set since no collision occured");
+}
