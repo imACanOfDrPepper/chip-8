@@ -61,6 +61,8 @@ fn main() {
             cpu.cycle(inputs);
         }
 
+        cpu.blanked = false;
+
         if cpu.sound_timer > 0 {
             cpu.sound_timer -= 1;
             if player.is_paused() {

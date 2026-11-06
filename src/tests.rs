@@ -270,7 +270,7 @@ fn test_subc_con() {
 
 #[test]
 fn test_shr() {
-    let cpu = run_test(0x8106, |c| c.v[1] = 0x69);
+    let cpu = run_test(0x8116, |c| c.v[1] = 0x69);
     assert_eq!(cpu.v[1], 0x34, "SHR should shift correctly");
     assert_eq!(cpu.v[15], 0x1, "SHR should set VF correctly");
 }
@@ -297,7 +297,7 @@ fn test_sbn_con() {
 
 #[test]
 fn test_shl() {
-    let cpu = run_test(0x810E, |c| c.v[1] = 0x69);
+    let cpu = run_test(0x811E, |c| c.v[1] = 0x69);
     assert_eq!(cpu.v[1], 0xD2, "SHL should shift correctly");
     assert_eq!(cpu.v[15], 0x0, "SHL should set VF correctly");
 }

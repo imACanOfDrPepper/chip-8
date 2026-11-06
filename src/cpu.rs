@@ -12,6 +12,7 @@ pub struct Cpu {
     pub pc: u16,
     pub prev_inputs: [bool; 16],
     pub presses: Vec<u8>,
+    pub blanked: bool,
 }
 
 impl Cpu {
@@ -28,6 +29,7 @@ impl Cpu {
             pc: 0x200,
             prev_inputs: [false; 16],
             presses: Vec::new(),
+            blanked: false,
         }
     }
 
@@ -101,13 +103,16 @@ impl Cpu {
                     self.v[(msb & 0xF) as usize] = self.v[(lsb >> 4) as usize];
                 }
                 (msb, lsb) if (msb >> 4) == 0x8 && (lsb & 0xF) == 1 => {
-                    self.v[(msb & 0xF) as usize] |= self.v[(lsb >> 4) as usize]
+                    self.v[(msb & 0xF) as usize] |= self.v[(lsb >> 4) as usize];
+                    self.v[0xF] = 0;
                 }
                 (msb, lsb) if (msb >> 4) == 0x8 && (lsb & 0xF) == 2 => {
-                    self.v[(msb & 0xF) as usize] &= self.v[(lsb >> 4) as usize]
+                    self.v[(msb & 0xF) as usize] &= self.v[(lsb >> 4) as usize];
+                    self.v[0xF] = 0;
                 }
                 (msb, lsb) if (msb >> 4) == 0x8 && (lsb & 0xF) == 3 => {
-                    self.v[(msb & 0xF) as usize] ^= self.v[(lsb >> 4) as usize]
+                    self.v[(msb & 0xF) as usize] ^= self.v[(lsb >> 4) as usize];
+                    self.v[0xF] = 0;
                 }
                 (msb, lsb) if (msb >> 4) == 0x8 && (lsb & 0xF) == 4 => {
                     let (result, carry) =
@@ -123,9 +128,13 @@ impl Cpu {
                 }
                 (msb, lsb) if (msb >> 4) == 0x8 && (lsb & 0xF) == 6 => {
                     let x = msb & 0xF;
+                    let y = lsb >> 4;
 
-                    self.v[0xF] = self.v[x as usize] & 1;
-                    self.v[x as usize] >>= 1;
+                    let val = self.v[y as usize] >> 1;
+                    let carry = self.v[y as usize] & 1;
+
+                    self.v[x as usize] = val;
+                    self.v[0xF] = carry;
                 }
                 (msb, lsb) if (msb >> 4) == 0x8 && (lsb & 0xF) == 7 => {
                     let (result, carry) =
@@ -135,9 +144,13 @@ impl Cpu {
                 }
                 (msb, lsb) if (msb >> 4) == 0x8 && (lsb & 0xF) == 0xE => {
                     let x = msb & 0xF;
+                    let y = lsb >> 4;
 
-                    self.v[0xF] = (self.v[x as usize] & 0x80) >> 7;
-                    self.v[x as usize] <<= 1;
+                    let val = self.v[y as usize] << 1;
+                    let carry = (self.v[y as usize] & 0x80) >> 7;
+
+                    self.v[x as usize] = val;
+                    self.v[0xF] = carry;
                 }
                 (msb, lsb) if (msb >> 4) == 0x9 && (lsb & 0xF) == 0x0 => {
                     if self.v[(msb & 0xF) as usize] != self.v[(lsb >> 4) as usize] {
@@ -157,32 +170,38 @@ impl Cpu {
                     self.v[(msb & 0xF) as usize] = rand & lsb;
                 }
                 (msb, lsb) if (msb >> 4) == 0xD => {
-                    let x_start = self.v[(msb & 0xF) as usize];
-                    let y_start = self.v[(lsb >> 4) as usize];
-                    let byte_num = lsb & 0xF;
+                    if self.blanked {
+                        self.pc -= 2;
+                    } else {
+                        let x_start = self.v[(msb & 0xF) as usize] & 0x3F;
+                        let y_start = self.v[(lsb >> 4) as usize] & 0x1F;
+                        let byte_num = lsb & 0xF;
 
-                    let mut collision = false;
+                        let mut collision = false;
 
-                    for offset in 0..byte_num {
-                        let total_offset = (self.index + offset as u16) & 0xFFF;
-                        let byte = self.memory[total_offset as usize];
+                        for offset in 0..byte_num {
+                            let total_offset = (self.index + offset as u16) & 0xFFF;
+                            let byte = self.memory[total_offset as usize];
 
-                        for idx in 0..8 {
-                            let bit = (byte >> 7 - idx) & 1;
-                            let x = x_start.wrapping_add(idx) & 0x3F;
-                            let y = y_start.wrapping_add(offset) & 0x1F;
+                            for idx in 0..8 {
+                                let bit = (byte >> 7 - idx) & 1;
+                                let x = x_start.wrapping_add(idx);
+                                let y = y_start.wrapping_add(offset);
 
-                            if bit == 1 {
-                                if ((self.frame_buffer[y as usize] >> (63 - x)) & 1) == 1 {
-                                    collision = true;
+                                if bit == 1 && x < 64 && y < 32 {
+                                    if ((self.frame_buffer[y as usize] >> (63 - x)) & 1) == 1 {
+                                        collision = true;
+                                    }
+
+                                    let new_byte = 1 << (63 - x);
+                                    self.frame_buffer[y as usize] ^= new_byte;
                                 }
-
-                                let new_byte = 1 << (63 - x);
-                                self.frame_buffer[y as usize] ^= new_byte;
                             }
                         }
+
+                        self.v[0xF] = collision as u8;
+                        self.blanked = true;
                     }
-                    self.v[0xF] = collision as u8;
                 }
                 (msb, lsb) if (msb >> 4) == 0xE && lsb == 0x9E => {
                     let idx = self.v[(msb & 0xF) as usize] & 0xF;
@@ -206,10 +225,17 @@ impl Cpu {
                     self.v[(msb & 0xF) as usize] = self.delay_timer;
                 }
                 (msb, lsb) if (msb >> 4) == 0xF && lsb == 0x0A => {
+                    for i in 0..16 {
+                        if !self.prev_inputs[i] && inputs[i] {
+                            self.presses.push(i as u8);
+                        }
+                    }
+
                     for press in self.presses.clone().into_iter() {
                         if inputs[press as usize] == false {
                             self.v[(msb & 0xF) as usize] = press;
                             self.pc += 2;
+                            self.presses = Vec::new();
                             break;
                         }
                     }
@@ -248,6 +274,8 @@ impl Cpu {
                         self.memory[((self.index + offset as u16) & 0xFFF) as usize] =
                             self.v[offset as usize];
                     }
+
+                    self.index += (v_end as u16 + 1) & 0xFFF;
                 }
                 (msb, lsb) if (msb >> 4) == 0xF && lsb == 0x65 => {
                     let v_end = msb & 0xF;
@@ -256,20 +284,17 @@ impl Cpu {
                         self.v[offset as usize] =
                             self.memory[((self.index + offset as u16) & 0xFFF) as usize];
                     }
+
+                    self.index += (v_end as u16 + 1) & 0xFFF;
                 }
                 _ => eprintln!(
                     "WARNING: unsupported opcode 0x{:04X}",
                     ((*msb as u16) << 8) | (*lsb as u16)
                 ),
             }
-
-            for i in 0..16 {
-                if !self.prev_inputs[i] && inputs[i] {
-                    self.presses.push(i as u8);
-                }
-            }
-            self.prev_inputs = inputs;
         }
+
+        self.prev_inputs = inputs;
     }
 }
 
