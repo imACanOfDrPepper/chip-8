@@ -12,13 +12,16 @@ use std::{
 fn main() {
     let mut args = Command::new("chip-8")
         .args([Arg::new("rom").required(true).value_parser(|path: &str| {
-            let metadata = fs::metadata(path).unwrap();
-            if !metadata.is_file() {
-                Err("Must be a valid path to a file")
-            } else if metadata.len() > 3584 {
-                Err("ROM is too large")
+            if let Ok(metadata) = fs::metadata(path) {
+                if !metadata.is_file() {
+                    Err("Must be a valid path to a file")
+                } else if metadata.len() > 3584 {
+                    Err("ROM is too large")
+                } else {
+                    fs::read(path).map_err(|_| "")
+                }
             } else {
-                fs::read(path).map_err(|_| "")
+                Err("Failed to fetch metadata")
             }
         })])
         .get_matches();
