@@ -410,3 +410,67 @@ fn test_ldst() {
     });
     assert_eq!(cpu.sound_timer, 0x39, "ST should be changed correctly");
 }
+
+#[test]
+fn test_addi() {
+    let cpu = run_test(0xF01E, |c| {
+        c.v[0] = 0x39;
+        c.index = 0xFFF;
+    });
+    assert_eq!(cpu.index, 0x38, "I should be added and overflow");
+}
+
+#[test]
+fn test_ldf() {
+    let cpu = run_test(0xF029, |c| c.v[0] = 0x1);
+    assert_eq!(cpu.index, 0x5, "I should be modified correctly");
+}
+
+#[test]
+fn test_ldb() {
+    let cpu = run_test(0xF033, |c| {
+        c.v[0] = 0x7B;
+        c.index = 0x420
+    });
+    assert_eq!(
+        cpu.memory[0x420], 1,
+        "Hundreds digit should be stored correctly"
+    );
+    assert_eq!(
+        cpu.memory[0x421], 2,
+        "Tens digit should be stored correctly"
+    );
+    assert_eq!(
+        cpu.memory[0x422], 3,
+        "Units digit should be stored correctly"
+    );
+}
+
+#[test]
+fn test_ldiv() {
+    let cpu = run_test(0xF255, |c| {
+        c.v[0] = 0x39;
+        c.v[1] = 0x42;
+        c.v[2] = 0x67;
+        c.index = 0x420
+    });
+    assert_eq!(
+        cpu.memory[0x420], 0x39,
+        "V0 digit should be stored correctly"
+    );
+    assert_eq!(cpu.memory[0x421], 0x42, "V1 should be stored correctly");
+    assert_eq!(cpu.memory[0x422], 0x67, "V2 should be stored correctly");
+}
+
+#[test]
+fn test_ldvi() {
+    let cpu = run_test(0xF265, |c| {
+        c.memory[0x420] = 0x39;
+        c.memory[0x421] = 0x42;
+        c.memory[0x422] = 0x67;
+        c.index = 0x420
+    });
+    assert_eq!(cpu.v[0], 0x39, "V0 digit should be stored correctly");
+    assert_eq!(cpu.v[1], 0x42, "V1 should be stored correctly");
+    assert_eq!(cpu.v[2], 0x67, "V2 should be stored correctly");
+}

@@ -169,8 +169,8 @@ impl Cpu {
 
                         for idx in 0..8 {
                             let bit = (byte >> 7 - idx) & 1;
-                            let x = (x_start + idx) & 0x3F;
-                            let y = (y_start + offset) & 0x1F;
+                            let x = x_start.wrapping_add(idx) & 0x3F;
+                            let y = y_start.wrapping_add(offset) & 0x1F;
 
                             if bit == 1 {
                                 if ((self.frame_buffer[y as usize] >> (63 - x)) & 1) == 1 {
@@ -226,7 +226,41 @@ impl Cpu {
 
                     self.sound_timer = val;
                 }
-                _ => todo!(),
+                (msb, lsb) if (msb >> 4) == 0xF && lsb == 0x1E => {
+                    self.index += self.v[(msb & 0xF) as usize] as u16;
+                    self.index &= 0xFFF
+                }
+                (msb, lsb) if (msb >> 4) == 0xF && lsb == 0x29 => {
+                    self.index = (self.v[(msb & 0xF) as usize] & 0xF) as u16 * 5;
+                }
+                (msb, lsb) if (msb >> 4) == 0xF && lsb == 0x33 => {
+                    let val = self.v[(msb & 0xF) as usize];
+                    let idx = (self.index & 0xFFF) as usize;
+
+                    self.memory[idx] = val / 100;
+                    self.memory[(idx + 1) & 0xFFF] = (val / 10) % 10;
+                    self.memory[(idx + 2) & 0xFFF] = val % 10;
+                }
+                (msb, lsb) if (msb >> 4) == 0xF && lsb == 0x55 => {
+                    let v_end = msb & 0xF;
+
+                    for offset in 0..=v_end {
+                        self.memory[((self.index + offset as u16) & 0xFFF) as usize] =
+                            self.v[offset as usize];
+                    }
+                }
+                (msb, lsb) if (msb >> 4) == 0xF && lsb == 0x65 => {
+                    let v_end = msb & 0xF;
+
+                    for offset in 0..=v_end {
+                        self.v[offset as usize] =
+                            self.memory[((self.index + offset as u16) & 0xFFF) as usize];
+                    }
+                }
+                _ => eprintln!(
+                    "WARNING: unsupported opcode 0x{:04X}",
+                    ((*msb as u16) << 8) | (*lsb as u16)
+                ),
             }
 
             for i in 0..16 {
