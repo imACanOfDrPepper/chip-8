@@ -3,6 +3,7 @@ mod cpu;
 use crate::cpu::Cpu;
 use clap::{Arg, Command};
 use minifb::{Key, Scale, Window, WindowOptions};
+use rodio::{DeviceSinkBuilder, Player, Source, source::SineWave};
 use std::{
     fs, thread,
     time::{Duration, Instant},
@@ -40,13 +41,39 @@ fn main() {
 
     let target_frame_time = Duration::from_secs_f64(1.0 / 60.0);
 
+    let mut stream_handle = DeviceSinkBuilder::open_default_sink().unwrap();
+    stream_handle.log_on_drop(false);
+
+    let player = Player::connect_new(&stream_handle.mixer());
+
+    let beep = SineWave::new(440.0).amplify(0.20);
+
+    player.append(beep);
+    player.pause();
+
     while window.is_open() && !window.is_key_down(Key::Escape) {
         let frame_start = Instant::now();
 
         let mut buffer = vec![0u32; 64 * 32];
+        let inputs = get_inputs(&window);
 
         for _ in 0..11 {
-            cpu.cycle();
+            cpu.cycle(inputs);
+        }
+
+        if cpu.sound_timer > 0 {
+            cpu.sound_timer -= 1;
+            if player.is_paused() {
+                player.play();
+            }
+        } else {
+            if !player.is_paused() {
+                player.pause();
+            }
+        }
+
+        if cpu.delay_timer > 0 {
+            cpu.delay_timer -= 1
         }
 
         for (y, &row) in cpu.frame_buffer.iter().enumerate() {
@@ -67,6 +94,27 @@ fn main() {
             thread::sleep(target_frame_time - elapsed);
         }
     }
+}
+
+fn get_inputs(window: &Window) -> [bool; 16] {
+    [
+        window.is_key_down(Key::X),
+        window.is_key_down(Key::Key1),
+        window.is_key_down(Key::Key2),
+        window.is_key_down(Key::Key3),
+        window.is_key_down(Key::Q),
+        window.is_key_down(Key::W),
+        window.is_key_down(Key::E),
+        window.is_key_down(Key::A),
+        window.is_key_down(Key::S),
+        window.is_key_down(Key::D),
+        window.is_key_down(Key::Z),
+        window.is_key_down(Key::C),
+        window.is_key_down(Key::Key4),
+        window.is_key_down(Key::R),
+        window.is_key_down(Key::F),
+        window.is_key_down(Key::V),
+    ]
 }
 
 #[cfg(test)]

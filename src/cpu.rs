@@ -10,6 +10,8 @@ pub struct Cpu {
     pub delay_timer: u8,
     pub frame_buffer: [u64; 32],
     pub pc: u16,
+    pub prev_inputs: [bool; 16],
+    pub presses: Vec<u8>,
 }
 
 impl Cpu {
@@ -24,6 +26,8 @@ impl Cpu {
             delay_timer: 0,
             frame_buffer: [0; 32],
             pc: 0x200,
+            prev_inputs: [false; 16],
+            presses: Vec::new(),
         }
     }
 
@@ -37,7 +41,7 @@ impl Cpu {
         }
     }
 
-    pub fn cycle(&mut self) {
+    pub fn cycle(&mut self, inputs: [bool; 16]) {
         if let (Some(msb), Some(lsb)) = (
             self.memory.get(self.pc as usize),
             self.memory.get((self.pc + 1) as usize),
@@ -180,8 +184,57 @@ impl Cpu {
                     }
                     self.v[0xF] = collision as u8;
                 }
+                (msb, lsb) if (msb >> 4) == 0xE && lsb == 0x9E => {
+                    let idx = self.v[(msb & 0xF) as usize] & 0xF;
+
+                    let is_down = inputs[idx as usize];
+
+                    if is_down {
+                        self.pc += 2
+                    }
+                }
+                (msb, lsb) if (msb >> 4) == 0xE && lsb == 0xA1 => {
+                    let idx = self.v[(msb & 0xF) as usize] & 0xF;
+
+                    let is_down = inputs[idx as usize];
+
+                    if !is_down {
+                        self.pc += 2
+                    }
+                }
+                (msb, lsb) if (msb >> 4) == 0xF && lsb == 0x07 => {
+                    self.v[(msb & 0xF) as usize] = self.delay_timer;
+                }
+                (msb, lsb) if (msb >> 4) == 0xF && lsb == 0x0A => {
+                    for press in self.presses.clone().into_iter() {
+                        if inputs[press as usize] == false {
+                            self.v[(msb & 0xF) as usize] = press;
+                            self.pc += 2;
+                            break;
+                        }
+                    }
+
+                    self.pc -= 2;
+                }
+                (msb, lsb) if (msb >> 4) == 0xF && lsb == 0x15 => {
+                    let val = self.v[(msb & 0xF) as usize];
+
+                    self.delay_timer = val;
+                }
+                (msb, lsb) if (msb >> 4) == 0xF && lsb == 0x18 => {
+                    let val = self.v[(msb & 0xF) as usize];
+
+                    self.sound_timer = val;
+                }
                 _ => todo!(),
             }
+
+            for i in 0..16 {
+                if !self.prev_inputs[i] && inputs[i] {
+                    self.presses.push(i as u8);
+                }
+            }
+            self.prev_inputs = inputs;
         }
     }
 }

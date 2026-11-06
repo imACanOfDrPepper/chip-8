@@ -8,7 +8,7 @@ fn run_test(opcode: u16, setup: impl FnOnce(&mut Cpu)) -> Cpu {
     cpu.memory[cpu.pc as usize] = (opcode >> 8) as u8;
     cpu.memory[(cpu.pc + 1) as usize] = (opcode & 0x00FF) as u8;
 
-    cpu.cycle();
+    cpu.cycle([false; 16]);
     cpu
 }
 
@@ -377,4 +377,36 @@ fn test_drw_collision() {
     });
     assert_eq!(cpu.frame_buffer[0], 0, "XOR should be applied correctly");
     assert_eq!(cpu.v[0xF], 1, "VF should be set since a collision occured");
+}
+
+#[test]
+fn test_lddt() {
+    let cpu = run_test(0xF007, |c| {
+        c.delay_timer = 0x39;
+    });
+    assert_eq!(cpu.v[0], 0x39, "DT should be changed correctly");
+}
+
+#[test]
+fn test_ldvdt() {
+    let cpu = run_test(0xF007, |c| {
+        c.delay_timer = 0x39;
+    });
+    assert_eq!(cpu.v[0], 0x39, "V0 should be changed correctly");
+}
+
+#[test]
+fn test_lddtv() {
+    let cpu = run_test(0xF015, |c| {
+        c.v[0] = 0x39;
+    });
+    assert_eq!(cpu.delay_timer, 0x39, "DT should be changed correctly");
+}
+
+#[test]
+fn test_ldst() {
+    let cpu = run_test(0xF018, |c| {
+        c.v[0] = 0x39;
+    });
+    assert_eq!(cpu.sound_timer, 0x39, "ST should be changed correctly");
 }
